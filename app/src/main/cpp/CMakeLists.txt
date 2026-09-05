@@ -25,6 +25,8 @@ set(GGML_METAL OFF CACHE BOOL "" FORCE)
 set(GGML_BLAS OFF CACHE BOOL "" FORCE)
 set(GGML_RPC OFF CACHE BOOL "" FORCE)
 set(GGML_STATIC ON CACHE BOOL "" FORCE)
+set(LLAMA_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(GGML_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
 
 set(LLAMA_SRC "" CACHE PATH "Pre-cloned llama.cpp source (skips FetchContent)")
 if(LLAMA_SRC AND EXISTS "${LLAMA_SRC}/CMakeLists.txt")
@@ -47,6 +49,7 @@ add_library(agentjin_llama SHARED llama_jni.cpp)
 target_include_directories(agentjin_llama PRIVATE
     ${llama_SOURCE_DIR}/include
     ${llama_SOURCE_DIR}/ggml/include
+    ${llama_SOURCE_DIR}/ggml/src
 )
 
 # Do not add tools/mtmd — that extra target is what ninja died on.
@@ -61,4 +64,4 @@ set_target_properties(agentjin_llama PROPERTIES
     C_VISIBILITY_PRESET default
     CXX_VISIBILITY_PRESET default
 )
-target_compile_options(agentjin_llama PRIVATE -Wno-unused-parameter)
+target_compile_options(agentjin_llama PRIVATE -Wno-unused-parameter -Wno-error)

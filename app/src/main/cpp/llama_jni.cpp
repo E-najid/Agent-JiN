@@ -36,7 +36,7 @@ struct Engine {
     int n_ctx = 0;
     int n_batch = 256;
     int n_threads = 0;
-    std::atomic<bool> abort{false};
+    std::atomic<bool> abort_flag{false};
     std::mutex mu;
 };
 
@@ -167,7 +167,7 @@ static std::string generate_loop(JNIEnv *env, Engine *e, int max_tokens,
 
     std::string out;
     for (int i = 0; i < max_tokens; i++) {
-        if (e->abort.load()) break;
+        if (e->abort_flag.load()) break;
         if (shouldStop && env->CallBooleanMethod(callback, shouldStop)) break;
 
         llama_token tok = llama_sampler_sample(e->sampler, e->ctx, -1);
@@ -297,7 +297,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_unload(JNIEnv *, jobject, jlong
     auto *e = reinterpret_cast<Engine *>(handle);
     if (!e) return;
     std::lock_guard<std::mutex> lock(e->mu);
-    e->abort.store(true);
+    e->abort_flag.store(true);
     free_sampler(e);
 #ifdef AGENTJIN_HAS_MTMD
     if (e->mtmd) {
@@ -319,7 +319,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_unload(JNIEnv *, jobject, jlong
 extern "C" JNIEXPORT void JNICALL
 Java_com_ngi_agentjin_core_inference_LlamaNative_abort(JNIEnv *, jobject, jlong handle) {
     auto *e = reinterpret_cast<Engine *>(handle);
-    if (e) e->abort.store(true);
+    if (e) e->abort_flag.store(true);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -328,7 +328,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_reset(JNIEnv *, jobject, jlong 
     if (!e) return;
     std::lock_guard<std::mutex> lock(e->mu);
     if (e->ctx) clear_kv(e->ctx);
-    e->abort.store(false);
+    e->abort_flag.store(false);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -344,7 +344,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_generate(
     std::vector<std::string> stops = parse_stops(jstring_to_utf8(env, jstops));
 
     std::lock_guard<std::mutex> lock(e->mu);
-    e->abort.store(false);
+    e->abort_flag.store(false);
     clear_kv(e->ctx);
 
     const llama_vocab *vocab = llama_model_get_vocab(e->model);
@@ -409,7 +409,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_generateVision(
     env->GetByteArrayRegion(jrgb, 0, nbytes, reinterpret_cast<jbyte *>(rgb.data()));
 
     std::lock_guard<std::mutex> lock(e->mu);
-    e->abort.store(false);
+    e->abort_flag.store(false);
     clear_kv(e->ctx);
 
     mtmd_bitmap *bmp = mtmd_bitmap_init(static_cast<uint32_t>(width),
