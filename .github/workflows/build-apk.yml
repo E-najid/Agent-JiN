@@ -68,8 +68,9 @@ jobs:
           echo "===== gradle exit $EXIT ====="
           tail -n 80 "$RUNNER_TEMP/gradle-build.log"
           echo "===== compiler diagnostics ====="
-          grep -E "^e: |error: |Unresolved |Compilation error" "$RUNNER_TEMP/gradle-build.log" | head -n 80 || true
-          grep -E "^e: |error: |Unresolved " "$RUNNER_TEMP/gradle-build.log" | head -n 40 | while IFS= read -r line; do
+          grep -E "^e: |error: |Unresolved |Compilation error" "$RUNNER_TEMP/gradle-build.log" | head -n 120 || true
+          grep "EncryptedMemoryStore.kt" "$RUNNER_TEMP/gradle-build.log" | head -n 40 || true
+          grep -E "^e: " "$RUNNER_TEMP/gradle-build.log" | head -n 80 | while IFS= read -r line; do
             echo "::error::$line"
           done
           if [ "$EXIT" -ne 0 ] && ! grep -q "^e: " "$RUNNER_TEMP/gradle-build.log"; then

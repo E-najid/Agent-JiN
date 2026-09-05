@@ -88,7 +88,7 @@ class TaskHistoryStore(
         val name = (taskId ?: "untasked") + ".jsonl"
         val path = listOf("task_history", name)
         val existing = storage.readBytes(path)?.toString(Charsets.UTF_8).orEmpty()
-        val line = json.encodeToString(ev)
-        storage.writeBytes(path, (existing + line + "\n").toByteArray())
+        val line = json.encodeToString(HistoryEvent.serializer(), ev)
+        storage.writeBytes(path, (existing + line + "\n").toByteArray(Charsets.UTF_8))
     }
 }
