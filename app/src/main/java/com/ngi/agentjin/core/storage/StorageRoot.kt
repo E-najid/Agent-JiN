@@ -165,6 +165,23 @@ class StorageRoot(
             ?: throw IllegalStateException("Unable to create directory $name")
     }
 
+    /**
+     * Android documents "w" / "wa" / "rw" / "rwt". "wt" is not valid and
+     * throws IllegalArgumentException on several OEM SAF providers.
+     */
+    private fun openOutputStreamTruncating(target: DocumentFile): java.io.OutputStream {
+        val resolver = context.contentResolver
+        val errors = mutableListOf<String>()
+        for (mode in arrayOf("w", "rwt", "wt")) {
+            try {
+                resolver.openOutputStream(target.uri, mode)?.let { return it }
+            } catch (t: Throwable) {
+                errors += "$mode: ${t.javaClass.simpleName} ${t.message}"
+            }
+        }
+        throw IllegalStateException("Unable to write ${target.name}: ${errors.joinToString("; ")}")
+    }
+
     private fun mimeFor(name: String): String = when {
         name.endsWith(".json") -> "application/json"
         name.endsWith(".db") -> "application/octet-stream"
