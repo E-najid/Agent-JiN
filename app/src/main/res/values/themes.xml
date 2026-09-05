@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AgentJiN" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">#100A29</item>
+        <item name="android:navigationBarColor">#100A29</item>
+        <item name="android:windowBackground">#100A29</item>
+        <item name="android:colorPrimary">#E7A83F</item>
+    </style>
+</resources>
