@@ -70,16 +70,9 @@ jobs:
           echo "===== compiler diagnostics ====="
           echo "===== ALL e: lines ====="
           grep -E "^e: " "$RUNNER_TEMP/gradle-build.log" || true
-          grep -F "EncryptedMemoryStore.kt" "$RUNNER_TEMP/gradle-build.log" | head -n 20 || true
-          grep -F "EncryptedMemoryStore.kt" "$RUNNER_TEMP/gradle-build.log" | grep "^e: " | head -n 8 | while IFS= read -r line; do
+          grep -E "^e: " "$RUNNER_TEMP/gradle-build.log" | head -n 8 | while IFS= read -r line; do
             echo "::error::$line"
           done
-          if ! grep -q "EncryptedMemoryStore.kt" "$RUNNER_TEMP/gradle-build.log"; then
-            echo "::error::EncryptedMemoryStore.kt produced no compiler lines"
-            grep -E "^e: " "$RUNNER_TEMP/gradle-build.log" | head -n 6 | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-          fi
           if [ "$EXIT" -ne 0 ] && ! grep -q "^e: " "$RUNNER_TEMP/gradle-build.log"; then
             tail -n 25 "$RUNNER_TEMP/gradle-build.log" | while IFS= read -r line; do
               echo "::error::$line"

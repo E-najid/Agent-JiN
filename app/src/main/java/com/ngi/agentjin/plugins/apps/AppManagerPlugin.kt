@@ -49,9 +49,9 @@ class AppManagerPlugin(
         val pm = deps.appContext.packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val found = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-        val apps = found.map { ri ->
+        val apps = found.mapNotNull { ri ->
+            val pkg = ri.activityInfo?.packageName ?: return@mapNotNull null
             val label = ri.loadLabel(pm).toString()
-            val pkg = ri.activityInfo.packageName
             buildJsonObject {
                 put("name", JsonPrimitive(label))
                 put("package", JsonPrimitive(pkg))
@@ -105,9 +105,9 @@ class AppManagerPlugin(
         val found = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
         val q = name.trim()
         val exact = found.firstOrNull { it.loadLabel(pm).toString().equals(q, ignoreCase = true) }
-        if (exact != null) return exact.activityInfo.packageName
+        if (exact != null) return exact.activityInfo?.packageName
         val contains = found.filter { it.loadLabel(pm).toString().contains(q, ignoreCase = true) }
-        return contains.singleOrNull()?.activityInfo.packageName
+        return contains.singleOrNull()?.activityInfo?.packageName
     }
 }
 

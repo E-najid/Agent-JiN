@@ -167,7 +167,6 @@ class JinAccessibilityService : AccessibilityService() {
                             val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(hw, colorSpace)
                                 ?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
                             hw.close()
-                            screenshot.release()
                             if (bitmap == null) {
                                 cont.resume(null)
                                 return
