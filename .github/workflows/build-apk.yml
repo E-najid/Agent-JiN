@@ -69,21 +69,6 @@ jobs:
             "cmake;3.22.1"
           echo "ANDROID_NDK_HOME=$SDK/ndk/27.2.12479018" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$SDK/ndk/27.2.12479018" >> "$GITHUB_ENV"
-          {
-            echo "sdk.dir=$SDK"
-            echo "ndk.dir=$SDK/ndk/27.2.12479018"
-          } > local.properties
-          echo "local.properties:" && cat local.properties
-          ls -la "$SDK/ndk/27.2.12479018" | head
-
-      - name: Toolchain check
-        run: |
-          command -v java
-          java -version
-          command -v gradle
-          gradle -v
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
 
       - name: Build debug APK (native llama.cpp + Kotlin)
         run: |
@@ -92,34 +77,16 @@ jobs:
             --stacktrace \
             --no-daemon \
             -PciAbi="${ABI}" \
-            -Dorg.gradle.jvmargs="-Xmx4g -Dfile.encoding=UTF-8" \
-            | tee gradle-native.log
+            -Dorg.gradle.jvmargs="-Xmx4g -Dfile.encoding=UTF-8"
 
       - name: Dump native errors
         if: failure()
         run: |
-          echo "===== last 300 lines of gradle log ====="
-          tail -n 300 gradle-native.log || true
-          echo "===== CMakeError / ninja logs ====="
-          find app/.cxx app/build -type f \( -name 'CMakeError.log' -o -name 'CMakeOutput.log' -o -name '*.log' \) 2>/dev/null \
-            | head -80 \
+          find app/.cxx app/build -type f \( -name 'CMakeError.log' -o -name 'CMakeOutput.log' \) 2>/dev/null \
             | while read -r f; do
                 echo "----- $f -----"
-                tail -n 100 "$f" || true
+                tail -n 120 "$f" || true
               done
-
-      - name: Upload native logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-build-logs
-          path: |
-            gradle-native.log
-            app/.cxx/**/CMakeError.log
-            app/.cxx/**/CMakeOutput.log
-            app/.cxx/**/*.log
-          if-no-files-found: ignore
-          retention-days: 7
 
       - name: Locate APK
         id: apk
@@ -131,7 +98,6 @@ jobs:
             find app/build/outputs -type f || true
             exit 1
           fi
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
           ls -lh "$APK"
           cp "$APK" "AgentJiN-debug-${{ github.sha }}.apk"
 
