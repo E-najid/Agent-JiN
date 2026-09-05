@@ -3,9 +3,20 @@ package com.ngi.agentjin.core.storage
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Base64
 import androidx.documentfile.provider.DocumentFile
+import com.ngi.agentjin.core.crypto.CryptoEngine
+import com.ngi.agentjin.core.crypto.CryptoException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Portable workspace on a user-chosen folder (Storage Access Framework).
@@ -69,7 +80,7 @@ class StorageRoot(
     }
 
     fun writeManifest(manifest: WorkspaceManifest) {
-        val text = json.encodeToString(manifest)
+        val text = json.encodeToString(WorkspaceManifest.serializer(), manifest)
         writeBytes(listOf("manifest.json"), text.toByteArray(Charsets.UTF_8))
     }
 
