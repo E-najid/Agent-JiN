@@ -4,8 +4,8 @@ import android.content.Context
 import android.util.Base64
 import com.ngi.agentjin.core.crypto.CryptoEngine
 import com.ngi.agentjin.core.crypto.CryptoException
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -88,17 +88,17 @@ class EncryptedMemoryStore(
     fun readEnabledPluginList(): List<String>? {
         val bytes = storage.readBytes(listOf("plugins_config", "enabled_plugins.json")) ?: return null
         val el = json.parseToJsonElement(bytes.toString(Charsets.UTF_8))
-        val arr = el.jsonObject["enabled"] as? kotlinx.serialization.json.JsonArray ?: return null
+        val arr = el.jsonObject["enabled"] as? JsonArray ?: return null
         return arr.mapNotNull { runCatching { it.jsonPrimitive.content }.getOrNull() }
     }
 
     fun writeEnabledPlugins(enabled: List<String>) {
         val body = buildJsonObject {
-            put("enabled", kotlinx.serialization.json.JsonArray(enabled.map { JsonPrimitive(it) }))
+            put("enabled", JsonArray(enabled.map { JsonPrimitive(it) }))
         }
         storage.writeBytes(
             listOf("plugins_config", "enabled_plugins.json"),
-            json.encodeToString(body).toByteArray(),
+            body.toString().toByteArray(Charsets.UTF_8),
         )
     }
 
@@ -111,7 +111,7 @@ class EncryptedMemoryStore(
     }
 
     private fun writeEncryptedJson(path: List<String>, obj: JsonObject) {
-        val plain = json.encodeToString(obj).toByteArray()
+        val plain = obj.toString().toByteArray(Charsets.UTF_8)
         val blob = crypto.encrypt(requireKey(), plain)
         crypto.wipe(plain)
         storage.writeBytes(path, blob)

@@ -81,8 +81,8 @@ class PluginManager(
 
     suspend fun setEnabled(name: String, enabled: Boolean) {
         val current = (memory.readEnabledPluginList() ?: EncryptedMemoryStore.DEFAULT_ENABLED.toList()).toMutableList()
-        if (enabled && name !in current) current += name
-        if (!enabled) current.remove(name)
+        if (enabled && name !in current) current.add(name)
+        if (!enabled) current.removeAll { it == name }
         memory.writeEnabledPlugins(current)
         if (!enabled) {
             active.remove(name)?.unloadResources()
