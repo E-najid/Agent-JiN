@@ -31,7 +31,7 @@ class SettingsPlugin(
         properties = mapOf(
             "action" to JsonSchemaProperty(
                 type = "string",
-                enum = listOf("status", "wifi", "bluetooth", "brightness"),
+                enumValues = listOf("status", "wifi", "bluetooth", "brightness"),
             ),
             "enabled" to JsonSchemaProperty("boolean", "For wifi/bluetooth: desired state"),
             "value" to JsonSchemaProperty("integer", "For brightness: 0–255", minimum = 0.0, maximum = 255.0),

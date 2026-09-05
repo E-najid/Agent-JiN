@@ -26,7 +26,7 @@ class AppManagerPlugin(
         properties = mapOf(
             "action" to JsonSchemaProperty(
                 type = "string",
-                enum = listOf("list", "open", "close"),
+                enumValues = listOf("list", "open", "close"),
                 description = "list | open | close",
             ),
             "package_name" to JsonSchemaProperty("string", "Application id, e.g. com.android.settings"),
