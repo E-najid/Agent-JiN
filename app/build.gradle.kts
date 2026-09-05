@@ -5,9 +5,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-val skipNative = project.hasProperty("skipNative")
-val llamaSrc = (project.findProperty("llamaSrc") as String?)?.trim().orEmpty()
-
 android {
     namespace = "com.ngi.agentjin"
     compileSdk = 35
@@ -18,27 +15,6 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        if (!skipNative) {
-            ndk {
-                // CI passes -PciAbi=arm64-v8a so GitHub Actions only compiles the phone ABI.
-                val ciAbi = (project.findProperty("ciAbi") as String?)?.trim().orEmpty()
-                abiFilters += if (ciAbi.isNotEmpty()) listOf(ciAbi) else listOf("arm64-v8a", "x86_64")
-            }
-            externalNativeBuild {
-                cmake {
-                    // Do not inject -std=c++17 / -fvisibility=hidden here: they apply to
-                    // llama.cpp as well and break the NDK ninja build.
-                    val args = mutableListOf(
-                        "-DANDROID_STL=c++_shared",
-                        "-DCMAKE_BUILD_TYPE=Release",
-                    )
-                    if (llamaSrc.isNotEmpty()) {
-                        args += "-DLLAMA_SRC=$llamaSrc"
-                    }
-                    arguments += args
-                }
-            }
-        }
     }
 
     buildTypes {
@@ -65,18 +41,7 @@ android {
         compose = true
         buildConfig = true
     }
-    if (!skipNative) {
-        ndkVersion = "27.2.12479018"
-        externalNativeBuild {
-            cmake {
-                path = file("src/main/cpp/CMakeLists.txt")
-            }
-        }
-    }
     packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
