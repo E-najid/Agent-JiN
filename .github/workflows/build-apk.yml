@@ -28,16 +28,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
           cache-read-only: false
@@ -69,6 +69,21 @@ jobs:
             "cmake;3.22.1"
           echo "ANDROID_NDK_HOME=$SDK/ndk/27.2.12479018" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$SDK/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          {
+            echo "sdk.dir=$SDK"
+            echo "ndk.dir=$SDK/ndk/27.2.12479018"
+          } > local.properties
+          echo "local.properties:" && cat local.properties
+          ls -la "$SDK/ndk/27.2.12479018" | head
+
+      - name: Toolchain check
+        run: |
+          command -v java
+          java -version
+          command -v gradle
+          gradle -v
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
 
       - name: Build debug APK (native llama.cpp + Kotlin)
         run: |
@@ -83,13 +98,14 @@ jobs:
       - name: Dump native errors
         if: failure()
         run: |
-          echo "===== last 250 lines of gradle log ====="
-          tail -n 250 gradle-native.log || true
+          echo "===== last 300 lines of gradle log ====="
+          tail -n 300 gradle-native.log || true
           echo "===== CMakeError / ninja logs ====="
-          find app/.cxx -type f \( -name 'CMakeError.log' -o -name 'CMakeOutput.log' -o -name '*.log' \) \
+          find app/.cxx app/build -type f \( -name 'CMakeError.log' -o -name 'CMakeOutput.log' -o -name '*.log' \) 2>/dev/null \
+            | head -80 \
             | while read -r f; do
                 echo "----- $f -----"
-                tail -n 80 "$f" || true
+                tail -n 100 "$f" || true
               done
 
       - name: Upload native logs
