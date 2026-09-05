@@ -219,7 +219,8 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_loadModel(
     if (path.empty()) return 0;
 
     llama_model_params mparams = llama_model_default_params();
-    mparams.use_mmap = use_mmap == JNI_TRUE;
+    mparams.n_gpu_layers = 0;
+    mparams.load_mode = use_mmap == JNI_TRUE ? LLAMA_LOAD_MODE_MMAP : LLAMA_LOAD_MODE_NONE;
 
     llama_model *model = llama_model_load_from_file(path.c_str(), mparams);
     if (!model) {
