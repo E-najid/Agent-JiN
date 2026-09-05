@@ -18,11 +18,13 @@ import com.ngi.agentjin.core.storage.ChatMessage
 import com.ngi.agentjin.core.storage.MANIFEST_SCHEMA_VERSION
 import com.ngi.agentjin.core.storage.UnlockResult
 import com.ngi.agentjin.core.storage.WorkspaceManifest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class AppPhase { FOLDER, RESTORE, PASSWORD, UNLOCK, DOWNLOAD, READY }
 
@@ -147,15 +149,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             password.fill('\u0000'); confirm.fill('\u0000')
             return
         }
+        if (_state.value.busy) return
         viewModelScope.launch {
+            _state.update { it.copy(busy = true, error = null, status = "Deriving encryption key…") }
             try {
-                c.storageRoot.ensureLayout()
-                c.session.initializeFresh(password)
+                withContext(Dispatchers.Default) {
+                    c.storageRoot.ensureLayout()
+                    c.session.initializeFresh(password)
+                }
                 c.conversations.openIfNeeded()
-                _state.update { it.copy(error = null, unlocked = true) }
+                _state.update { it.copy(error = null, unlocked = true, status = "") }
                 afterUnlock()
             } catch (t: Throwable) {
-                _state.update { it.copy(error = t.message) }
+                _state.update {
+                    it.copy(
+                        busy = false,
+                        status = "",
+                        error = t.message ?: t.javaClass.simpleName,
+                    )
+                }
             } finally {
                 password.fill('\u0000')
                 confirm.fill('\u0000')
@@ -164,34 +176,63 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun unlock(password: CharArray) {
+        if (_state.value.busy) return
         viewModelScope.launch {
-            when (val r = c.session.unlockWithPassword(password)) {
-                UnlockResult.Ok -> {
-                    c.conversations.openIfNeeded()
-                    afterUnlock()
+            _state.update { it.copy(busy = true, error = null, status = "Unlocking…") }
+            try {
+                val r = withContext(Dispatchers.Default) { c.session.unlockWithPassword(password) }
+                when (r) {
+                    UnlockResult.Ok -> {
+                        c.conversations.openIfNeeded()
+                        afterUnlock()
+                    }
+                    is UnlockResult.BadPassword -> _state.update {
+                        it.copy(
+                            busy = false,
+                            status = "",
+                            error = "Wrong password (${r.attempts} failed attempts)",
+                        )
+                    }
+                    is UnlockResult.LockedOut -> _state.update {
+                        it.copy(
+                            busy = false,
+                            status = "",
+                            error = "Locked. Try again in ${r.remainingMs / 1000}s",
+                            lockRemainingMs = r.remainingMs,
+                        )
+                    }
+                    is UnlockResult.Error -> _state.update {
+                        it.copy(busy = false, status = "", error = r.message)
+                    }
                 }
-                is UnlockResult.BadPassword -> _state.update {
-                    it.copy(error = "Wrong password (${r.attempts} failed attempts)")
+            } catch (t: Throwable) {
+                _state.update {
+                    it.copy(busy = false, status = "", error = t.message ?: t.javaClass.simpleName)
                 }
-                is UnlockResult.LockedOut -> _state.update {
-                    it.copy(error = "Locked. Try again in ${r.remainingMs / 1000}s", lockRemainingMs = r.remainingMs)
-                }
-                is UnlockResult.Error -> _state.update { it.copy(error = r.message) }
+            } finally {
+                password.fill('\u0000')
             }
-            password.fill('\u0000')
         }
     }
 
     fun unlockWithKey(key: ByteArray) {
         viewModelScope.launch {
-            when (val r = c.session.unlockWithUnwrappedKey(key)) {
-                UnlockResult.Ok -> {
-                    c.conversations.openIfNeeded()
-                    afterUnlock()
+            _state.update { it.copy(busy = true, error = null, status = "Unlocking…") }
+            try {
+                when (val r = withContext(Dispatchers.Default) { c.session.unlockWithUnwrappedKey(key) }) {
+                    UnlockResult.Ok -> {
+                        c.conversations.openIfNeeded()
+                        afterUnlock()
+                    }
+                    else -> _state.update { it.copy(busy = false, status = "", error = "Biometric unlock failed") }
                 }
-                else -> _state.update { it.copy(error = "Biometric unlock failed") }
+            } catch (t: Throwable) {
+                _state.update {
+                    it.copy(busy = false, status = "", error = t.message ?: t.javaClass.simpleName)
+                }
+            } finally {
+                key.fill(0)
             }
-            key.fill(0)
         }
     }
 
@@ -213,6 +254,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _state.update {
             it.copy(
                 unlocked = true,
+                busy = false,
+                status = "",
                 phase = if (missing) AppPhase.DOWNLOAD else AppPhase.READY,
                 conversationId = conv.id,
                 messages = messages,

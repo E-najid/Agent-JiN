@@ -115,10 +115,10 @@ class StorageRoot(
         val existing = dir.findFile(name)
         val target = existing ?: dir.createFile(mimeFor(name), name)
             ?: throw IllegalStateException("Unable to create $name")
-        context.contentResolver.openOutputStream(target.uri, "wt")?.use { out ->
+        openOutputStreamTruncating(target).use { out ->
             out.write(bytes)
             out.flush()
-        } ?: throw IllegalStateException("Unable to write $name")
+        }
     }
 
     fun openRead(path: List<String>): java.io.InputStream? {
@@ -134,8 +134,7 @@ class StorageRoot(
         val existing = dir.findFile(name)
         val target = existing ?: dir.createFile(mimeFor(name), name)
             ?: throw IllegalStateException("Unable to create $name")
-        return context.contentResolver.openOutputStream(target.uri, "wt")
-            ?: throw IllegalStateException("Unable to write $name")
+        return openOutputStreamTruncating(target)
     }
 
     fun openWriteResumable(path: List<String>): Pair<DocumentFile, Long> {

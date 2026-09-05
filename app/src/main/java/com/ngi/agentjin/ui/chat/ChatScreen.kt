@@ -61,8 +61,8 @@ fun ChatScreen(
     var draft by remember { mutableStateOf("") }
     val list = rememberLazyListState()
     LaunchedEffect(state.messages.size, state.streaming) {
-        val last = state.messages.size + if (state.streaming.isNotEmpty()) 1 else 0
-        if (last > 0) list.animateScrollToItem(last)
+        val count = state.messages.size + if (state.streaming.isNotEmpty()) 1 else 0
+        if (count > 0) list.animateScrollToItem(count - 1)
     }
     Scaffold(
         topBar = {

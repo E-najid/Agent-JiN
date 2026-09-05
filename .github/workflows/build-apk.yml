@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: apk-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -103,13 +106,36 @@ jobs:
             exit 1
           fi
           ls -lh "$APK"
+          echo "===== native libs in APK ====="
           unzip -l "$APK" | grep -E '\.so$' || true
-          cp "$APK" "AgentJiN-debug-${{ github.sha }}.apk"
+          if ! unzip -l "$APK" | grep -q 'libagentjin_llama.so'; then
+            echo "::error::APK is missing libagentjin_llama.so"
+            exit 1
+          fi
+          cp "$APK" "AgentJiN-debug.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgentJiN-debug-${{ github.sha }}
-          path: AgentJiN-debug-${{ github.sha }}.apk
+          name: AgentJiN-debug
+          path: AgentJiN-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish phone download (GitHub Release)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NOTES="Debug APK with libagentjin_llama.so (arm64). Phone: open this release, tap AgentJiN-debug.apk, install. Allow unknown apps if asked."
+          if gh release view apk-latest >/dev/null 2>&1; then
+            gh release upload apk-latest AgentJiN-debug.apk --clobber
+            gh release edit apk-latest --title "Agent JiN — phone APK" --notes "$NOTES" --latest
+          else
+            gh release create apk-latest AgentJiN-debug.apk \
+              --title "Agent JiN — phone APK" \
+              --notes "$NOTES" \
+              --latest
+          fi
+          echo "Phone download: https://github.com/${{ github.repository }}/releases/tag/apk-latest"

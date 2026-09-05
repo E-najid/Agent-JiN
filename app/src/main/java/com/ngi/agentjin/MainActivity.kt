@@ -101,12 +101,16 @@ class MainActivity : FragmentActivity() {
                         )
                         state.phase == AppPhase.PASSWORD -> PasswordSetupScreen(
                             error = state.error,
+                            busy = state.busy,
+                            status = state.status,
                             onSubmit = vm::setupPassword,
                         )
                         state.phase == AppPhase.UNLOCK -> UnlockScreen(
                             error = state.error,
                             lockMs = state.lockRemainingMs,
                             biometric = state.biometricEnabled && vm.hasBiometricWrap(),
+                            busy = state.busy,
+                            status = state.status,
                             onUnlock = vm::unlock,
                             onBiometric = { promptBiometric() },
                         )

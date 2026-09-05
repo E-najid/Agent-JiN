@@ -68,7 +68,7 @@ fun RestoreScreen(manifest: WorkspaceManifest, onRestore: () -> Unit, onFresh: (
 }
 
 @Composable
-fun PasswordSetupScreen(error: String?, onSubmit: (CharArray, CharArray) -> Unit) {
+fun PasswordSetupScreen(error: String?, busy: Boolean, status: String, onSubmit: (CharArray, CharArray) -> Unit) {
     var a by remember { mutableStateOf("") }
     var b by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -80,6 +80,7 @@ fun PasswordSetupScreen(error: String?, onSubmit: (CharArray, CharArray) -> Unit
             label = { Text("Password / PIN") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            enabled = !busy,
         )
         OutlinedTextField(
             value = b,
@@ -87,9 +88,13 @@ fun PasswordSetupScreen(error: String?, onSubmit: (CharArray, CharArray) -> Unit
             label = { Text("Confirm") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            enabled = !busy,
         )
+        if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.primary)
         if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
-        PrimaryButton("Create workspace") { onSubmit(a.toCharArray(), b.toCharArray()) }
+        PrimaryButton(if (busy) "Working…" else "Create workspace", enabled = !busy) {
+            onSubmit(a.toCharArray(), b.toCharArray())
+        }
     }
 }
 
@@ -98,6 +103,8 @@ fun UnlockScreen(
     error: String?,
     lockMs: Long,
     biometric: Boolean,
+    busy: Boolean,
+    status: String,
     onUnlock: (CharArray) -> Unit,
     onBiometric: () -> Unit,
 ) {
@@ -111,11 +118,16 @@ fun UnlockScreen(
             label = { Text("Password / PIN") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            enabled = !busy,
         )
         if (lockMs > 0) Text("Locked for ${lockMs / 1000}s", color = MaterialTheme.colorScheme.error)
+        if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.primary)
         if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
-        PrimaryButton("Unlock", enabled = lockMs <= 0L) { onUnlock(a.toCharArray()) }
-        if (biometric) SecondaryButton("Use biometrics") { onBiometric() }
+        PrimaryButton(
+            if (busy) "Working…" else "Unlock",
+            enabled = lockMs <= 0L && !busy,
+        ) { onUnlock(a.toCharArray()) }
+        if (biometric) SecondaryButton("Use biometrics", enabled = !busy) { onBiometric() }
     }
 }
 

@@ -131,8 +131,9 @@ class CryptoEngine(
         const val GCM_IV_LEN = 12
         const val GCM_TAG_BITS = 128
         const val TRANSFORMATION = "AES/GCM/NoPadding"
-        // Interactive-ish cost that still fits a 3GB phone during unlock.
-        const val DEFAULT_MEMORY_KIB = 32 * 1024
+        // 16 MiB Argon2id — strong enough for an on-device PIN, small enough
+        // that a 3GB phone will not be LMK-killed while deriving.
+        const val DEFAULT_MEMORY_KIB = 16 * 1024
         const val DEFAULT_ITERATIONS = 3
         const val DEFAULT_PARALLELISM = 1
     }

@@ -24,7 +24,7 @@ android {
         externalNativeBuild {
             cmake {
                 val args = mutableListOf(
-                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_STL=c++_static",
                     "-DCMAKE_BUILD_TYPE=Release",
                 )
                 if (llamaSrc.isNotEmpty()) {
