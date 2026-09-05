@@ -26,15 +26,21 @@ set(GGML_BLAS OFF CACHE BOOL "" FORCE)
 set(GGML_RPC OFF CACHE BOOL "" FORCE)
 set(GGML_STATIC ON CACHE BOOL "" FORCE)
 
-include(FetchContent)
-set(LLAMA_CPP_TAG "master" CACHE STRING "llama.cpp git tag/commit")
-FetchContent_Declare(
-    llama
-    GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git
-    GIT_TAG        ${LLAMA_CPP_TAG}
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(llama)
+set(LLAMA_SRC "" CACHE PATH "Pre-cloned llama.cpp source (skips FetchContent)")
+if(LLAMA_SRC AND EXISTS "${LLAMA_SRC}/CMakeLists.txt")
+    add_subdirectory(${LLAMA_SRC} ${CMAKE_BINARY_DIR}/llama.cpp EXCLUDE_FROM_ALL)
+    set(llama_SOURCE_DIR ${LLAMA_SRC})
+else()
+    include(FetchContent)
+    set(LLAMA_CPP_TAG "master" CACHE STRING "llama.cpp git tag/commit")
+    FetchContent_Declare(
+        llama
+        GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git
+        GIT_TAG        ${LLAMA_CPP_TAG}
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(llama)
+endif()
 
 add_library(agentjin_llama SHARED llama_jni.cpp)
 
