@@ -15,9 +15,10 @@ jobs:
   apk:
     name: Assemble debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dkotlin.incremental=false"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
 
     steps:
       - name: Checkout
@@ -38,7 +39,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install platform 35
+      - name: Install NDK, CMake, platform 35
         run: |
           set -euo pipefail
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
@@ -54,28 +55,41 @@ jobs:
             exit 1
           fi
           yes | "$SM" --licenses >/dev/null || true
-          "$SM" --install "platforms;android-35" "build-tools;35.0.0"
+          "$SM" --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$SDK/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$SDK/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
-      - name: Build debug APK
+      - name: Clone llama.cpp
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp
+          echo "llama.cpp $(git -C third_party/llama.cpp rev-parse --short HEAD)"
+
+      - name: Build debug APK (native llama.cpp)
         run: |
           set +e
-          echo "which gradle: $(command -v gradle || true)"
-          gradle -v
-          gradle :app:assembleDebug --stacktrace --no-daemon \
+          gradle :app:assembleDebug \
+            --stacktrace \
+            --no-daemon \
+            -PciAbi=arm64-v8a \
+            -PllamaSrc="${GITHUB_WORKSPACE}/third_party/llama.cpp" \
             -Dorg.gradle.jvmargs="-Xmx4g -Dfile.encoding=UTF-8" \
             > "$RUNNER_TEMP/gradle-build.log" 2>&1
           EXIT=$?
           echo "===== gradle exit $EXIT ====="
           tail -n 80 "$RUNNER_TEMP/gradle-build.log"
-          echo "===== compiler diagnostics ====="
-          echo "===== ALL e: lines ====="
-          grep -E "^e: " "$RUNNER_TEMP/gradle-build.log" || true
-          grep -E "^e: " "$RUNNER_TEMP/gradle-build.log" | head -n 8 | while IFS= read -r line; do
+          grep -E "^e: |ninja: |CMake Error|FAILED: " "$RUNNER_TEMP/gradle-build.log" | tail -n 40 || true
+          grep -E "^e: |ninja: |CMake Error|FAILED: " "$RUNNER_TEMP/gradle-build.log" | tail -n 8 | while IFS= read -r line; do
             echo "::error::$line"
           done
-          if [ "$EXIT" -ne 0 ] && ! grep -q "^e: " "$RUNNER_TEMP/gradle-build.log"; then
-            tail -n 25 "$RUNNER_TEMP/gradle-build.log" | while IFS= read -r line; do
-              echo "::error::$line"
+          if [ "$EXIT" -ne 0 ]; then
+            find app/.cxx app/build -name 'CMakeError.log' 2>/dev/null | while read -r f; do
+              echo "----- $f -----"
+              tail -n 40 "$f" || true
             done
           fi
           exit $EXIT
@@ -86,10 +100,10 @@ jobs:
           APK=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
           if [ -z "$APK" ]; then
             echo "No APK produced"
-            find app/build/outputs -type f || true
             exit 1
           fi
           ls -lh "$APK"
+          unzip -l "$APK" | grep -E '\.so$' || true
           cp "$APK" "AgentJiN-debug-${{ github.sha }}.apk"
 
       - name: Upload APK artifact

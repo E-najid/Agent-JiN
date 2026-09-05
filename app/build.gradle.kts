@@ -5,6 +5,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val llamaSrc = (project.findProperty("llamaSrc") as String?)?.trim().orEmpty()
+
 android {
     namespace = "com.ngi.agentjin"
     compileSdk = 35
@@ -15,6 +17,22 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        ndk {
+            val ciAbi = (project.findProperty("ciAbi") as String?)?.trim().orEmpty()
+            abiFilters += if (ciAbi.isNotEmpty()) listOf(ciAbi) else listOf("arm64-v8a")
+        }
+        externalNativeBuild {
+            cmake {
+                val args = mutableListOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DCMAKE_BUILD_TYPE=Release",
+                )
+                if (llamaSrc.isNotEmpty()) {
+                    args += "-DLLAMA_SRC=$llamaSrc"
+                }
+                arguments += args
+            }
+        }
     }
 
     buildTypes {
@@ -41,7 +59,16 @@ android {
         compose = true
         buildConfig = true
     }
+    ndkVersion = "27.2.12479018"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
     packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
