@@ -22,11 +22,12 @@ android {
         }
         externalNativeBuild {
             cmake {
+                // Do not inject -std=c++17 / -fvisibility=hidden here: they apply to
+                // llama.cpp as well and break the NDK ninja build.
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
                     "-DCMAKE_BUILD_TYPE=Release",
                 )
-                cppFlags += listOf("-std=c++17", "-O3", "-fvisibility=hidden")
             }
         }
     }

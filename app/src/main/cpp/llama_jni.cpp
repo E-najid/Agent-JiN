@@ -16,6 +16,10 @@
 #include "mtmd-helper.h"
 #endif
 
+#ifndef JNIEXPORT
+#define JNIEXPORT __attribute__((visibility("default")))
+#endif
+
 #define LOG_TAG "AgentJiN-llama"
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGe(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -30,6 +34,7 @@ struct Engine {
     mtmd_context *mtmd = nullptr;
 #endif
     int n_ctx = 0;
+    int n_batch = 256;
     int n_threads = 0;
     std::atomic<bool> abort{false};
     std::mutex mu;
@@ -95,17 +100,14 @@ static void clear_kv(llama_context *ctx) {
     }
 }
 
-static bool decode_tokens(llama_context *ctx, const llama_token *tokens, int n, bool logits_last) {
+static bool decode_tokens(Engine *e, const llama_token *tokens, int n) {
     int i = 0;
-    const int n_batch = llama_n_batch(ctx);
+    const int n_batch = e->n_batch > 0 ? e->n_batch : 256;
     while (i < n) {
         int take = n - i;
         if (take > n_batch) take = n_batch;
         llama_batch batch = llama_batch_get_one(const_cast<llama_token *>(tokens + i), take);
-        if (!logits_last || i + take < n) {
-            // llama_batch_get_one already requests logits for the last token of this slice.
-        }
-        if (llama_decode(ctx, batch) != 0) {
+        if (llama_decode(e->ctx, batch) != 0) {
             return false;
         }
         i += take;
@@ -190,7 +192,7 @@ static std::string generate_loop(JNIEnv *env, Engine *e, int max_tokens,
             }
             break;
         }
-        if (!decode_tokens(e->ctx, &tok, 1, true)) {
+        if (!decode_tokens(e, &tok, 1)) {
             LOGe("decode failed during generation");
             break;
         }
@@ -218,8 +220,6 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_loadModel(
 
     llama_model_params mparams = llama_model_default_params();
     mparams.use_mmap = use_mmap == JNI_TRUE;
-    mparams.use_mlock = false;
-    mparams.n_gpu_layers = 0;
 
     llama_model *model = llama_model_load_from_file(path.c_str(), mparams);
     if (!model) {
@@ -248,6 +248,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_loadModel(
     engine->model = model;
     engine->ctx = ctx;
     engine->n_ctx = ctx_size;
+    engine->n_batch = 256;
     engine->n_threads = threads;
     LOGi("loaded %s ctx=%d threads=%d mmap=%d", path.c_str(), ctx_size, threads, (int) use_mmap);
     return reinterpret_cast<jlong>(engine);
@@ -366,7 +367,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_generate(
         LOGe("prompt too long for context (%d >= %d)", n, e->n_ctx);
         return env->NewStringUTF("");
     }
-    if (!decode_tokens(e->ctx, tokens.data(), n, true)) {
+    if (!decode_tokens(e, tokens.data(), n)) {
         LOGe("prompt decode failed");
         return env->NewStringUTF("");
     }
@@ -442,7 +443,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_generateVision(
 
     llama_pos n_past = 0;
     int32_t eval_rc = mtmd_helper_eval_chunks(
-            e->mtmd, e->ctx, chunks, 0, 0, llama_n_batch(e->ctx), true, &n_past);
+            e->mtmd, e->ctx, chunks, 0, 0, e->n_batch, true, &n_past);
     mtmd_bitmap_free(bmp);
     mtmd_input_chunks_free(chunks);
     if (eval_rc != 0) {
@@ -459,6 +460,5 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_generateVision(
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_ngi_agentjin_core_inference_LlamaNative_systemInfo(JNIEnv *env, jobject) {
-    const char *info = llama_print_system_info();
-    return env->NewStringUTF(info ? info : "");
+    return env->NewStringUTF("llama.cpp CPU mmap (agentjin_llama)");
 }

@@ -1,19 +1,23 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(agentjin_llama)
 
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# llama.cpp / ggml: CPU, mmap-friendly, no optional desktop deps.
+# llama.cpp as a static CPU library, mmap-friendly, no desktop extras.
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
-set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
-set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_COMMON OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(LLAMA_OPENSSL OFF CACHE BOOL "" FORCE)
+set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
+set(LLAMA_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(LLAMA_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
@@ -24,6 +28,9 @@ set(GGML_METAL OFF CACHE BOOL "" FORCE)
 set(GGML_BLAS OFF CACHE BOOL "" FORCE)
 set(GGML_RPC OFF CACHE BOOL "" FORCE)
 set(GGML_STATIC ON CACHE BOOL "" FORCE)
+set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
+set(GGML_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(GGML_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
 set(MTMD_VIDEO OFF CACHE BOOL "" FORCE)
 
 include(FetchContent)
@@ -43,27 +50,22 @@ target_include_directories(agentjin_llama PRIVATE
     ${llama_SOURCE_DIR}/ggml/include
 )
 
+# `llama` already pulls ggml. Do not add mtmd here: its CMakeLists pulls dozens of
+# extra sources and vendor targets that break Android NDK ninja builds.
 target_link_libraries(agentjin_llama
     llama
-    ggml
     android
     log
 )
 
-# Vision path: libmtmd (mmproj + screenshot RGB). Built only if present in this llama.cpp.
-set(MTMD_DIR "${llama_SOURCE_DIR}/tools/mtmd")
-if(EXISTS "${MTMD_DIR}/CMakeLists.txt")
-    if(NOT TARGET mtmd)
-        add_subdirectory(${MTMD_DIR} ${CMAKE_BINARY_DIR}/mtmd)
-    endif()
-    if(TARGET mtmd)
-        target_link_libraries(agentjin_llama mtmd)
-        target_include_directories(agentjin_llama PRIVATE ${MTMD_DIR})
-        target_compile_definitions(agentjin_llama PRIVATE AGENTJIN_HAS_MTMD=1)
-    endif()
-endif()
+# JNI symbols must be exported even if AGP injects -fvisibility=hidden.
+set_target_properties(agentjin_llama PROPERTIES
+    C_VISIBILITY_PRESET default
+    CXX_VISIBILITY_PRESET default
+    VISIBILITY_INLINES_HIDDEN OFF
+)
 
 target_compile_options(agentjin_llama PRIVATE
-    -fvisibility=hidden
+    -fvisibility=default
     -Wno-unused-parameter
 )
