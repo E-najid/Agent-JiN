@@ -49,15 +49,15 @@ class Planner(
         val prompt = buildPrompt(userMessage, history, screenDump, extra)
         var raw = text.complete(
             prompt = prompt,
-            maxTokens = 512,
+            maxTokens = 192,
             temperature = 0.2f,
             grammar = ORCHESTRATOR_GBNF,
             onToken = onToken,
         )
-        if (raw.isBlank()) {
+        if (raw.isBlank() || raw.startsWith("ERROR:")) {
             raw = text.complete(
                 prompt = prompt,
-                maxTokens = 512,
+                maxTokens = 192,
                 temperature = 0.2f,
                 grammar = null,
                 onToken = onToken,

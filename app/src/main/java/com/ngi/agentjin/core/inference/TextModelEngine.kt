@@ -24,14 +24,16 @@ class TextModelEngine(
                 "Native llama.cpp library is not loaded: ${LlamaNative.loadError ?: "unknown error"}",
             )
         }
-        native.initBackend()
-        val file = models.localFileFor(ModelCatalog.TEXT)
-            ?: throw ModelNotReadyException("Text model file is missing or checksum failed. Download it from Settings.")
-        val h = native.loadModel(file.absolutePath, ram.textContextSize, ram.nThreads, ram.useMmap)
-        if (h == 0L) {
-            throw ModelNotReadyException("llama.cpp failed to load ${ModelCatalog.TEXT.filename}")
+        withContext(Dispatchers.Default) {
+            native.initBackend()
+            val file = models.localFileFor(ModelCatalog.TEXT)
+                ?: throw ModelNotReadyException("Text model file is missing or checksum failed. Download it from Settings.")
+            val h = native.loadModel(file.absolutePath, ram.textContextSize, ram.nThreads, ram.useMmap)
+            if (h == 0L) {
+                throw ModelNotReadyException("llama.cpp failed to load ${ModelCatalog.TEXT.filename}")
+            }
+            handle = h
         }
-        handle = h
     }
 
     suspend fun unload() = mutex.withLock {

@@ -22,17 +22,22 @@ class Orchestrator(
     ): String {
         conversations.addMessage(conversationId, "user", userText)
         try {
+            onStatus("Loading model…")
             text.ensureLoaded()
         } catch (e: ModelNotReadyException) {
             val msg = e.message ?: "Text model is not ready"
             conversations.addMessage(conversationId, "assistant", msg)
             return msg
+        } catch (t: Throwable) {
+            val msg = "Failed to load the text model: ${t.message ?: t.javaClass.simpleName}"
+            conversations.addMessage(conversationId, "assistant", msg)
+            return msg
         }
         val history = conversations.messages(conversationId)
             .dropLast(1)
-            .takeLast(12)
+            .takeLast(8)
             .map { it.role to it.content }
-        val dump = if (screen.isAvailable()) screen.dumpText() else null
+        val dump = if (screen.isAvailable()) screen.dumpText()?.take(2000) else null
         onStatus("Thinking…")
         val acc = StringBuilder()
         val decision = planner.decide(userText, history, dump, extra = null) { tok ->

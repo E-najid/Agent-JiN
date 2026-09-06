@@ -59,6 +59,31 @@ static std::string jstring_to_utf8(JNIEnv *env, jstring js) {
     return out;
 }
 
+// NewStringUTF aborts on incomplete UTF-8 (a token can be a mid-character).
+static jstring utf8_to_jstring(JNIEnv *env, const std::string &s) {
+    const jsize n = static_cast<jsize>(s.size());
+    jbyteArray arr = env->NewByteArray(n);
+    if (!arr) return env->NewStringUTF("");
+    if (n > 0) {
+        env->SetByteArrayRegion(arr, 0, n, reinterpret_cast<const jbyte *>(s.data()));
+    }
+    jclass cls = env->FindClass("java/lang/String");
+    jmethodID ctor = env->GetMethodID(cls, "<init>", "([BLjava/lang/String;)V");
+    jstring cs = env->NewStringUTF("UTF-8");
+    jstring out = static_cast<jstring>(env->NewObject(cls, ctor, arr, cs));
+    env->DeleteLocalRef(arr);
+    env->DeleteLocalRef(cs);
+    env->DeleteLocalRef(cls);
+    return out ? out : env->NewStringUTF("");
+}
+
+static bool java_failed(JNIEnv *env) {
+    if (!env->ExceptionCheck()) return false;
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    return true;
+}
+
 static int default_threads() {
     long n = sysconf(_SC_NPROCESSORS_ONLN);
     if (n < 2) return 1;
@@ -168,7 +193,10 @@ static std::string generate_loop(JNIEnv *env, Engine *e, int max_tokens,
     std::string out;
     for (int i = 0; i < max_tokens; i++) {
         if (e->abort_flag.load()) break;
-        if (shouldStop && env->CallBooleanMethod(callback, shouldStop)) break;
+        if (shouldStop) {
+            if (env->CallBooleanMethod(callback, shouldStop) == JNI_TRUE) break;
+            if (java_failed(env)) break;
+        }
 
         llama_token tok = llama_sampler_sample(e->sampler, e->ctx, -1);
         llama_sampler_accept(e->sampler, tok);
@@ -177,9 +205,10 @@ static std::string generate_loop(JNIEnv *env, Engine *e, int max_tokens,
         std::string piece = token_to_piece(vocab, tok);
         out += piece;
         if (onToken && !piece.empty()) {
-            jstring jp = env->NewStringUTF(piece.c_str());
+            jstring jp = utf8_to_jstring(env, piece);
             env->CallVoidMethod(callback, onToken, jp);
             env->DeleteLocalRef(jp);
+            if (java_failed(env)) break;
         }
         if (ends_with_stop(out, stops)) {
             // Strip the stop sequence.
@@ -233,8 +262,9 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_loadModel(
 
     llama_context_params cparams = llama_context_default_params();
     cparams.n_ctx = ctx_size;
-    cparams.n_batch = 256;
-    cparams.n_ubatch = 256;
+    // Small batches keep peak RAM low on 3GB phones during prompt decode.
+    cparams.n_batch = 64;
+    cparams.n_ubatch = 64;
     cparams.n_threads = threads;
     cparams.n_threads_batch = threads;
 
@@ -249,7 +279,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_loadModel(
     engine->model = model;
     engine->ctx = ctx;
     engine->n_ctx = ctx_size;
-    engine->n_batch = 256;
+    engine->n_batch = 64;
     engine->n_threads = threads;
     LOGi("loaded %s ctx=%d threads=%d mmap=%d", path.c_str(), ctx_size, threads, (int) use_mmap);
     return reinterpret_cast<jlong>(engine);

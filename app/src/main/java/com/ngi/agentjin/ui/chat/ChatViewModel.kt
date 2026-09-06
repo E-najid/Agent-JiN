@@ -244,7 +244,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun afterUnlock() {
         c.pluginManager.reload()
         val checks = c.modelManager.checkAll()
-        val missing = checks.any { it.status != ModelFileStatus.OK }
+        val textOk = checks.any { it.spec.id == ModelCatalog.TEXT.id && it.status == ModelFileStatus.OK }
         val conv = c.conversations.listConversations().firstOrNull()
             ?: c.conversations.createConversation()
         val messages = c.conversations.messages(conv.id)
@@ -256,7 +256,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 unlocked = true,
                 busy = false,
                 status = "",
-                phase = if (missing) AppPhase.DOWNLOAD else AppPhase.READY,
+                phase = if (textOk) AppPhase.READY else AppPhase.DOWNLOAD,
                 conversationId = conv.id,
                 messages = messages,
                 plugins = plugins,
@@ -270,17 +270,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startDownload() {
-        ModelDownloadService.start(getApplication())
-        _state.update { it.copy(status = "Downloading models…") }
+        ModelDownloadService.start(getApplication(), listOf(ModelCatalog.TEXT.id))
+        _state.update { it.copy(status = "Downloading text model…") }
         viewModelScope.launch {
             ModelDownloadService.running.collect { running ->
                 if (!running) {
                     val checks = c.modelManager.checkAll()
-                    val missing = checks.any { it.status != ModelFileStatus.OK }
+                    val textOk = checks.any { it.spec.id == ModelCatalog.TEXT.id && it.status == ModelFileStatus.OK }
                     _state.update {
                         it.copy(
                             modelChecks = checks,
-                            phase = if (missing) AppPhase.DOWNLOAD else AppPhase.READY,
+                            phase = if (textOk) AppPhase.READY else AppPhase.DOWNLOAD,
                             error = ModelDownloadService.lastError.value,
                         )
                     }
@@ -293,14 +293,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val id = _state.value.conversationId ?: return
         if (text.isBlank() || _state.value.busy) return
         viewModelScope.launch {
-            _state.update { it.copy(busy = true, streaming = "", status = "Thinking…") }
+            _state.update { it.copy(busy = true, streaming = "", error = null, status = "Thinking…") }
             try {
-                val reply = c.orchestrator.handleUserMessage(
-                    conversationId = id,
-                    userText = text.trim(),
-                    onToken = { tok -> _state.update { s -> s.copy(streaming = s.streaming + tok) } },
-                    onStatus = { st -> _state.update { s -> s.copy(status = st) } },
-                )
+                val reply = withContext(Dispatchers.Default) {
+                    c.orchestrator.handleUserMessage(
+                        conversationId = id,
+                        userText = text.trim(),
+                        onToken = { tok ->
+                            _state.update { s -> s.copy(streaming = s.streaming + tok) }
+                        },
+                        onStatus = { st -> _state.update { s -> s.copy(status = st) } },
+                    )
+                }
                 val messages = c.conversations.messages(id)
                 _state.update {
                     it.copy(
@@ -308,12 +312,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         streaming = "",
                         busy = false,
                         status = "",
+                        error = if (reply.startsWith("ERROR:")) reply else null,
                         historyFiles = c.taskHistory.listTaskFiles(),
                     )
                 }
-                reply // used
             } catch (t: Throwable) {
-                _state.update { it.copy(busy = false, error = t.message, status = "") }
+                _state.update {
+                    it.copy(
+                        busy = false,
+                        error = t.message ?: t.javaClass.simpleName,
+                        status = "",
+                    )
+                }
             }
         }
     }

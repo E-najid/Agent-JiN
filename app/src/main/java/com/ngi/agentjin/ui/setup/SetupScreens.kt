@@ -135,7 +135,7 @@ fun UnlockScreen(
 fun DownloadScreen(state: UiState, onStart: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("On-device models", style = MaterialTheme.typography.headlineMedium)
-        Text("Downloads stay inside the app. Wi-Fi only is ${if (state.wifiOnly) "on" else "off"}. Checksums are SHA-256.")
+        Text("The text model (~220 MiB) is enough to chat. Vision models are optional and downloaded later from Settings. Wi-Fi only is ${if (state.wifiOnly) "on" else "off"}.")
         state.modelChecks.forEach { check ->
             ModelRow(check)
         }
@@ -144,7 +144,7 @@ fun DownloadScreen(state: UiState, onStart: () -> Unit) {
             if (d.error != null) Text(d.error, color = MaterialTheme.colorScheme.error)
         }
         if (state.error != null) Text(state.error, color = MaterialTheme.colorScheme.error)
-        PrimaryButton("Download missing models", onClick = onStart)
+        PrimaryButton("Download text model", onClick = onStart)
         Spacer(Modifier.height(8.dp))
         Text("If every source fails, the error lists the exact filename, SHA-256, and manual copy instructions.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         ModelCatalog.ALL.forEach {

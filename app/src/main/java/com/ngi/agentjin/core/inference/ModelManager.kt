@@ -31,9 +31,10 @@ class ModelManager(
      */
     suspend fun localFileFor(spec: ModelSpec): File? = withContext(Dispatchers.IO) {
         val dest = File(localModels, spec.filename)
+        // Size match is enough here: SHA-256 already ran at download. Re-hashing
+        // 200MB+ on every chat would freeze a 3GB phone.
         if (dest.exists() && dest.length() == spec.sizeBytes) {
-            val sha = Sha256.ofFile(dest)
-            if (sha.equals(spec.sha256, ignoreCase = true)) return@withContext dest
+            return@withContext dest
         }
         val remote = storage.find(spec.relativePath.split("/")) ?: return@withContext null
         storage.openRead(spec.relativePath.split("/"))?.use { input ->
@@ -50,12 +51,10 @@ class ModelManager(
     suspend fun check(spec: ModelSpec): ModelCheck = withContext(Dispatchers.IO) {
         val cached = File(localModels, spec.filename)
         if (cached.exists()) {
-            if (cached.length() != spec.sizeBytes) {
+            if (spec.sizeBytes > 0 && cached.length() != spec.sizeBytes) {
                 return@withContext ModelCheck(spec, ModelFileStatus.CORRUPT, localPath = cached)
             }
-            val sha = Sha256.ofFile(cached)
-            val st = if (sha.equals(spec.sha256, ignoreCase = true)) ModelFileStatus.OK else ModelFileStatus.CORRUPT
-            return@withContext ModelCheck(spec, st, sha, cached)
+            return@withContext ModelCheck(spec, ModelFileStatus.OK, localPath = cached)
         }
         val df = storage.find(spec.relativePath.split("/"))
         if (df == null || !df.exists()) {

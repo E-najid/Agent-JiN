@@ -42,7 +42,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AgentJiN"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:extractNativeLibs="true">
+        android:extractNativeLibs="true"
+        android:largeHeap="true">
 
         <activity
             android:name=".MainActivity"
