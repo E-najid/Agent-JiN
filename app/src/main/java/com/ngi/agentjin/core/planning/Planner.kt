@@ -167,20 +167,19 @@ class Planner(
     }
 
     companion object {
-        // Constrains the 350M orchestrator to valid action JSON.
+        // Flat params only. Nested JSON made the grammar sampler hang then
+        // OOM-kill the process on 3GB phones.
         const val ORCHESTRATOR_GBNF = """
 root ::= object
-object ::= "{" ws typefield ("," ws extra)? "}"
+object ::= "{" ws typefield "}"
 typefield ::= "\"type\"" ws ":" ws tvalue
 tvalue ::= chat | ask | plan
 chat ::= "\"chat\"" "," ws "\"message\"" ws ":" ws string
 ask ::= "\"ask_user\"" "," ws "\"question\"" ws ":" ws string
 plan ::= "\"plan\"" "," ws "\"steps\"" ws ":" ws "[" ws step ("," ws step)* ws "]"
-step ::= "{" ws "\"id\"" ws ":" ws integer "," ws "\"plugin\"" ws ":" ws string "," ws "\"params\"" ws ":" ws json "," ws "\"description\"" ws ":" ws string ws "}"
-extra ::= "\"message\"" ws ":" ws string
-json ::= object2 | array | string | number | "true" | "false" | "null"
-object2 ::= "{" ws (string ws ":" ws json ("," ws string ws ":" ws json)*)? ws "}"
-array ::= "[" ws (json ("," ws json)*)? ws "]"
+step ::= "{" ws "\"id\"" ws ":" ws integer "," ws "\"plugin\"" ws ":" ws string "," ws "\"params\"" ws ":" ws params "," ws "\"description\"" ws ":" ws string ws "}"
+params ::= "{" ws (param ("," ws param)*)? ws "}"
+param ::= string ws ":" ws (string | number | "true" | "false" | "null")
 string ::= "\"" chars "\""
 chars ::= char*
 char ::= [^"\\] | "\\" escape
