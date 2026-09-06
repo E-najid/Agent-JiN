@@ -19,18 +19,7 @@ import android.util.Base64
  */
 class SecretStore(context: Context) {
     private val appContext = context.applicationContext
-
-    private val masterKey = MasterKey.Builder(appContext)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val prefs = EncryptedSharedPreferences.create(
-        appContext,
-        "agentjin_secrets",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+    private val prefs = devicePrefs(appContext, "agentjin_secrets")
 
     fun putToken(pluginName: String, tokenId: String, value: String) {
         prefs.edit().putString(tokenKey(pluginName, tokenId), value).apply()
