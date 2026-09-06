@@ -102,30 +102,31 @@ class Planner(
     }
 
     fun parse(raw: String): ModelDecision {
-        val obj = extractJsonObject(raw)
-            ?: return ModelDecision.ParseError(raw, "No JSON object in model output")
-        val type = runCatching { obj["type"]?.jsonPrimitive?.contentOrNull }.getOrNull()
-            ?: return ModelDecision.ParseError(raw, "Missing type")
-        return when (type) {
-            "chat" -> ModelDecision.Chat(obj["message"]?.jsonPrimitive?.contentOrNull ?: "")
-            "ask_user" -> ModelDecision.AskUser(obj["question"]?.jsonPrimitive?.contentOrNull ?: "Need more information")
-            "plan" -> {
-                val stepsEl = obj["steps"] ?: return ModelDecision.ParseError(raw, "plan missing steps")
-                val arr = stepsEl as? JsonArray ?: stepsEl.jsonArray
-                val steps = arr.mapIndexed { idx, el ->
-                    val o = el.jsonObject
-                    PlanStep(
-                        id = o["id"]?.jsonPrimitive?.intOrNull ?: (idx + 1),
-                        plugin = o["plugin"]?.jsonPrimitive?.contentOrNull
-                            ?: return ModelDecision.ParseError(raw, "step missing plugin"),
-                        params = o["params"] as? JsonObject ?: JsonObject(emptyMap()),
-                        description = o["description"]?.jsonPrimitive?.contentOrNull ?: "",
-                    )
+        return try {
+            val obj = extractJsonObject(raw)
+                ?: return ModelDecision.ParseError(raw, "No JSON object in model output")
+            val type = obj["type"]?.jsonPrimitive?.contentOrNull
+                ?: return ModelDecision.ParseError(raw, "Missing type")
+            when (type) {
+                "chat" -> ModelDecision.Chat(obj["message"]?.jsonPrimitive?.contentOrNull ?: "")
+                "ask_user" -> ModelDecision.AskUser(obj["question"]?.jsonPrimitive?.contentOrNull ?: "Need more information")
+                "plan" -> {
+                    val stepsEl = obj["steps"] ?: return ModelDecision.ParseError(raw, "plan missing steps")
+                    val arr = stepsEl as? JsonArray ?: stepsEl.jsonArray
+                    val steps = arr.mapIndexed { idx, el ->
+                        val o = el.jsonObject
+                        PlanStep(
+                            id = o["id"]?.jsonPrimitive?.intOrNull ?: (idx + 1),
+                            plugin = o["plugin"]?.jsonPrimitive?.contentOrNull
+                                ?: return ModelDecision.ParseError(raw, "step missing plugin"),
+                            params = o["params"] as? JsonObject ?: JsonObject(emptyMap()),
+                            description = o["description"]?.jsonPrimitive?.contentOrNull ?: "",
+                        )
+                    }
+                    if (steps.isEmpty()) ModelDecision.ParseError(raw, "empty plan")
+                    else ModelDecision.Plan(steps)
                 }
-                if (steps.isEmpty()) ModelDecision.ParseError(raw, "empty plan")
-                else ModelDecision.Plan(steps)
-            }
-            else -> ModelDecision.ParseError(raw, "unknown type $type")
+                else -> ModelDecision.ParseError(raw, "unknown type $type")
             }
         } catch (t: Throwable) {
             ModelDecision.ParseError(raw, t.message ?: "parse")
