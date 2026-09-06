@@ -1,0 +1,3 @@
+com.ngi.agentjin.plugins.screen.ScreenAgentPluginFactory
+com.ngi.agentjin.plugins.apps.AppManagerPluginFactory
+com.ngi.agentjin.plugins.settings.SettingsPluginFactory

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agent JiN</string>
+    <string name="accessibility_service_label">Agent JiN screen agent</string>
+    <string name="accessibility_service_description">Allows Agent JiN to read on-screen UI elements and perform taps, typing, and gestures when you ask it to act on your phone. The service does nothing unless you send a task in the app.</string>
+    <string name="download_channel_name">Model downloads</string>
+    <string name="download_channel_desc">Progress for on-device model downloads</string>
+    <string name="capture_channel_name">Screen capture</string>
+    <string name="capture_channel_desc">Used only while the vision model reads a screenshot</string>
+</resources>
