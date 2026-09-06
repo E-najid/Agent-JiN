@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.ngi.agentjin.AgentJinApp
 import com.ngi.agentjin.core.download.DownloadProgress
 import com.ngi.agentjin.core.download.ModelDownloadService
-import com.ngi.agentjin.core.inference.LlamaNative
 import com.ngi.agentjin.core.inference.ModelCatalog
 import com.ngi.agentjin.core.inference.ModelCheck
 import com.ngi.agentjin.core.inference.ModelFileStatus
@@ -31,8 +30,8 @@ enum class AppPhase { FOLDER, RESTORE, PASSWORD, UNLOCK, DOWNLOAD, READY }
 data class UiState(
     val phase: AppPhase = AppPhase.FOLDER,
     val ramSummary: String = "",
-    val nativeOk: Boolean = LlamaNative.available,
-    val nativeError: String? = LlamaNative.loadError,
+    val nativeOk: Boolean = false,
+    val nativeError: String? = null,
     val restoreCandidate: WorkspaceManifest? = null,
     val unlocked: Boolean = false,
     val status: String = "",
@@ -80,6 +79,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         refreshPhase()
+        viewModelScope.launch {
+            repeat(40) {
+                _state.update {
+                    it.copy(nativeOk = c.llama.available, nativeError = c.llama.loadError)
+                }
+                if (c.llama.connected) return@launch
+                kotlinx.coroutines.delay(250)
+            }
+        }
         viewModelScope.launch {
             c.confirmationGate.requests.collect { req ->
                 _state.update { it.copy(confirm = req) }
@@ -251,11 +259,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val plugins = c.pluginManager.catalog().map { p ->
             PluginInfo(p.name, p.description, c.pluginManager.isEnabled(p.name), p.isSensitive)
         }
+        if (textOk) {
+            runCatching { c.textEngine.ensureLoaded() }
+        }
         _state.update {
             it.copy(
                 unlocked = true,
                 busy = false,
                 status = "",
+                nativeOk = c.llama.available,
+                nativeError = c.llama.loadError,
                 phase = if (textOk) AppPhase.READY else AppPhase.DOWNLOAD,
                 conversationId = conv.id,
                 messages = messages,

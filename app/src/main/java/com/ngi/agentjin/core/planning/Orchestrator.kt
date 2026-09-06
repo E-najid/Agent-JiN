@@ -35,45 +35,73 @@ class Orchestrator(
         }
         val history = conversations.messages(conversationId)
             .dropLast(1)
-            .takeLast(8)
-            .map { it.role to it.content }
-        val dump = if (screen.isAvailable()) screen.dumpText()?.take(2000) else null
+            .takeLast(4)
+            .map { it.role to it.content.take(300) }
         onStatus("Thinking…")
-        val acc = StringBuilder()
-        val decision = planner.decide(userText, history, dump, extra = null) { tok ->
-            acc.append(tok)
-            onToken(tok)
-        }
-        val reply = when (decision) {
-            is ModelDecision.Chat -> decision.message.ifBlank { acc.toString() }
-            is ModelDecision.AskUser -> {
-                val answer = questions.ask(decision.question)
-                if (answer.isNullOrBlank()) {
-                    decision.question
-                } else {
-                    handleUserMessage(conversationId, "My answer: $answer", onToken, onStatus)
-                }
-            }
-            is ModelDecision.Plan -> {
-                onStatus("Executing plan…")
-                executor.run(userText, decision.steps, onStatus)
-            }
-            is ModelDecision.ParseError -> {
-                // One retry without grammar if the constrained decode failed.
-                if (decision.raw.isBlank()) {
-                    "The model produced no output. The GGUF may be missing or llama.cpp failed to generate."
-                } else {
-                    val prose = decision.raw.trim()
-                    if (prose.startsWith("{")) {
-                        "I couldn't parse a plan from the model output (${decision.reason}). Raw: ${prose.take(500)}"
-                    } else {
-                        prose
+        val reply = try {
+            if (looksLikeTask(userText)) {
+                val dump = if (screen.isAvailable()) screen.dumpText()?.take(800) else null
+                when (val decision = planner.decide(userText, history, dump, extra = null, onToken = null)) {
+                    is ModelDecision.Chat -> decision.message
+                    is ModelDecision.AskUser -> {
+                        val answer = questions.ask(decision.question)
+                        if (answer.isNullOrBlank()) decision.question
+                        else handleUserMessage(conversationId, "My answer: $answer", onToken, onStatus)
+                    }
+                    is ModelDecision.Plan -> {
+                        onStatus("Executing plan…")
+                        executor.run(userText, decision.steps, onStatus)
+                    }
+                    is ModelDecision.ParseError -> {
+                        val prose = decision.raw.trim()
+                        if (prose.isBlank()) {
+                            "The model produced no output."
+                        } else if (prose.startsWith("{")) {
+                            "I couldn't parse a plan (${decision.reason})."
+                        } else {
+                            prose.take(1500)
+                        }
                     }
                 }
+            } else {
+                chatReply(userText, history)
             }
+        } catch (t: Throwable) {
+            "Generation failed: ${t.message ?: t.javaClass.simpleName}"
         }
         conversations.addMessage(conversationId, "assistant", reply)
-        conversations.persist()
+        runCatching { conversations.persist() }
         return reply
+    }
+
+    private suspend fun chatReply(userText: String, history: List<Pair<String, String>>): String {
+        val prompt = buildString {
+            append("You are Agent JiN. Answer briefly in the user's language.\n")
+            for ((role, content) in history) {
+                append(role).append(": ").append(content).append('\n')
+            }
+            append("user: ").append(userText.take(400)).append('\n')
+            append("assistant: ")
+        }
+        val out = text.complete(
+            prompt = prompt,
+            maxTokens = 96,
+            temperature = 0.4f,
+            grammar = null,
+            onToken = null,
+        )
+        return out.trim().ifBlank { "I couldn't generate a reply. Try again." }
+    }
+
+    companion object {
+        fun looksLikeTask(text: String): Boolean {
+            val t = text.lowercase()
+            val keys = listOf(
+                "open ", "turn on", "turn off", "wifi", "wi-fi", "bluetooth",
+                "brightness", "tap ", "click ", "scroll", "go back", "home screen",
+                "screenshot", "type ", "enable ", "disable ", "launch ",
+            )
+            return keys.any { t.contains(it) }
+        }
     }
 }

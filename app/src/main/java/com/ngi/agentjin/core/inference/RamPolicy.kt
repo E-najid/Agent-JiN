@@ -17,9 +17,9 @@ class RamPolicy(context: Context) {
     val totalRamMb: Long = totalRamBytes / (1024L * 1024L)
     val constrained: Boolean = totalRamBytes <= 3L * 1024L * 1024L * 1024L + 256L * 1024L * 1024L
 
-    val textContextSize: Int = if (constrained) 512 else 1024
-    val visionContextSize: Int = if (constrained) 512 else 1024
-    val nThreads: Int = if (constrained) 2 else 3
+    val textContextSize: Int = if (constrained) 256 else 512
+    val visionContextSize: Int = if (constrained) 256 else 512
+    val nThreads: Int = 1
     val keepVisionResident: Boolean = !constrained
     val visionIdleUnloadMs: Long = if (constrained) 5_000L else 30_000L
     val useMmap: Boolean = true

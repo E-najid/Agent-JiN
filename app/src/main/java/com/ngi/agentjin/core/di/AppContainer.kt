@@ -45,7 +45,8 @@ class AppContainer(val app: Application) {
     val userQuestions = UserQuestionGate()
     val undoManager = UndoManager()
     val modelManager = ModelManager(storageRoot, ramPolicy, app.filesDir)
-    val textEngine = TextModelEngine(modelManager, ramPolicy)
+    val llama = LlamaClient(app).also { it.bind() }
+    val textEngine = TextModelEngine(modelManager, ramPolicy, llama)
     val visionEngine = VisionModelEngine(modelManager, ramPolicy, scope)
     val screen = ScreenPerception()
     val screenshots = ScreenshotCapture(app)

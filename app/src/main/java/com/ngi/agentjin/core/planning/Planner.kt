@@ -47,22 +47,15 @@ class Planner(
         onToken: ((String) -> Unit)? = null,
     ): ModelDecision {
         val prompt = buildPrompt(userMessage, history, screenDump, extra)
-        var raw = text.complete(
+        // Never attach GBNF — llama.cpp grammar sampler aborted the process
+        // on 3GB phones. Parse JSON if the 350M model emits it; otherwise chat.
+        val raw = text.complete(
             prompt = prompt,
-            maxTokens = 192,
+            maxTokens = 96,
             temperature = 0.2f,
-            grammar = ORCHESTRATOR_GBNF,
-            onToken = onToken,
+            grammar = null,
+            onToken = null,
         )
-        if (raw.isBlank() || raw.startsWith("ERROR:")) {
-            raw = text.complete(
-                prompt = prompt,
-                maxTokens = 192,
-                temperature = 0.2f,
-                grammar = null,
-                onToken = onToken,
-            )
-        }
         return parse(raw)
     }
 
@@ -111,7 +104,7 @@ class Planner(
     fun parse(raw: String): ModelDecision {
         val obj = extractJsonObject(raw)
             ?: return ModelDecision.ParseError(raw, "No JSON object in model output")
-        val type = obj["type"]?.jsonPrimitive?.contentOrNull
+        val type = runCatching { obj["type"]?.jsonPrimitive?.contentOrNull }.getOrNull()
             ?: return ModelDecision.ParseError(raw, "Missing type")
         return when (type) {
             "chat" -> ModelDecision.Chat(obj["message"]?.jsonPrimitive?.contentOrNull ?: "")
@@ -133,6 +126,9 @@ class Planner(
                 else ModelDecision.Plan(steps)
             }
             else -> ModelDecision.ParseError(raw, "unknown type $type")
+            }
+        } catch (t: Throwable) {
+            ModelDecision.ParseError(raw, t.message ?: "parse")
         }
     }
 

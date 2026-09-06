@@ -78,5 +78,10 @@
             android:name=".core.screen.ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <service
+            android:name=".core.inference.LlamaService"
+            android:exported="false"
+            android:process=":llama" />
     </application>
 </manifest>

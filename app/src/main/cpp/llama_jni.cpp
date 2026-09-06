@@ -105,14 +105,8 @@ static void make_sampler(Engine *e, float temp, const char *grammar, const llama
     free_sampler(e);
     llama_sampler_chain_params cparams = llama_sampler_chain_default_params();
     e->sampler = llama_sampler_chain_init(cparams);
-    if (grammar && grammar[0] != '\0' && vocab) {
-        llama_sampler *g = llama_sampler_init_grammar(vocab, grammar, "root");
-        if (g) {
-            llama_sampler_chain_add(e->sampler, g);
-        } else {
-            LOGe("grammar sampler failed to compile; continuing without grammar");
-        }
-    }
+    (void) grammar;
+    (void) vocab;
     llama_sampler_chain_add(e->sampler, llama_sampler_init_min_p(0.05f, 1));
     llama_sampler_chain_add(e->sampler, llama_sampler_init_temp(temp <= 0.0f ? 0.0f : temp));
     llama_sampler_chain_add(e->sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
@@ -279,7 +273,7 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_loadModel(
     engine->model = model;
     engine->ctx = ctx;
     engine->n_ctx = ctx_size;
-    engine->n_batch = 64;
+    engine->n_batch = 32;
     engine->n_threads = threads;
     LOGi("loaded %s ctx=%d threads=%d mmap=%d", path.c_str(), ctx_size, threads, (int) use_mmap);
     return reinterpret_cast<jlong>(engine);
@@ -370,41 +364,49 @@ Java_com_ngi_agentjin_core_inference_LlamaNative_generate(
     if (!e || !e->model || !e->ctx) {
         return env->NewStringUTF("");
     }
-    std::string prompt = jstring_to_utf8(env, jprompt);
-    std::string grammar = jstring_to_utf8(env, jgrammar);
-    std::vector<std::string> stops = parse_stops(jstring_to_utf8(env, jstops));
+    try {
+        std::string prompt = jstring_to_utf8(env, jprompt);
+        (void) jgrammar; // grammar disabled — sampler abort was killing the process
+        std::vector<std::string> stops = parse_stops(jstring_to_utf8(env, jstops));
 
-    std::lock_guard<std::mutex> lock(e->mu);
-    e->abort_flag.store(false);
-    clear_kv(e->ctx);
+        std::lock_guard<std::mutex> lock(e->mu);
+        e->abort_flag.store(false);
+        clear_kv(e->ctx);
 
-    const llama_vocab *vocab = llama_model_get_vocab(e->model);
-    make_sampler(e, temp, grammar.c_str(), vocab);
+        const llama_vocab *vocab = llama_model_get_vocab(e->model);
+        make_sampler(e, temp, "", vocab);
 
-    std::vector<llama_token> tokens(prompt.size() + 16);
-    int n = llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()),
-                           tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
-    if (n < 0) {
-        tokens.resize(-n);
-        n = llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()),
-                           tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
+        std::vector<llama_token> tokens(prompt.size() + 16);
+        int n = llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()),
+                               tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
+        if (n < 0) {
+            tokens.resize(static_cast<size_t>(-n));
+            n = llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()),
+                               tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
+        }
+        if (n <= 0) {
+            LOGe("tokenize failed (%d)", n);
+            return env->NewStringUTF("");
+        }
+        tokens.resize(static_cast<size_t>(n));
+        if (n >= e->n_ctx - 8) {
+            LOGe("prompt too long for context (%d >= %d)", n, e->n_ctx);
+            return utf8_to_jstring(env, "ERROR: prompt too long for this device's context window");
+        }
+        if (!decode_tokens(e, tokens.data(), n)) {
+            LOGe("prompt decode failed");
+            return utf8_to_jstring(env, "ERROR: llama.cpp failed to decode the prompt");
+        }
+        int cap = max_tokens > 0 ? max_tokens : 96;
+        if (cap > 128) cap = 128;
+        std::string out = generate_loop(env, e, cap, stops, callback);
+        return utf8_to_jstring(env, out);
+    } catch (const std::exception &ex) {
+        LOGe("generate exception: %s", ex.what());
+        return utf8_to_jstring(env, std::string("ERROR: ") + ex.what());
+    } catch (...) {
+        return env->NewStringUTF("ERROR: native generate failed");
     }
-    if (n <= 0) {
-        LOGe("tokenize failed (%d)", n);
-        return env->NewStringUTF("");
-    }
-    tokens.resize(n);
-    if (n >= e->n_ctx - 8) {
-        LOGe("prompt too long for context (%d >= %d)", n, e->n_ctx);
-        return env->NewStringUTF("");
-    }
-    if (!decode_tokens(e, tokens.data(), n)) {
-        LOGe("prompt decode failed");
-        return env->NewStringUTF("");
-    }
-    int cap = max_tokens > 0 ? max_tokens : 256;
-    std::string out = generate_loop(env, e, cap, stops, callback);
-    return env->NewStringUTF(out.c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
