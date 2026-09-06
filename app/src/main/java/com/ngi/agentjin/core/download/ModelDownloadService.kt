@@ -32,10 +32,16 @@ class ModelDownloadService : Service() {
         val ids = intent?.getStringArrayExtra(EXTRA_IDS)?.toList() ?: ModelCatalog.ALL.map { it.id }
         ensureChannel()
         val notification = buildNotification("Preparing download…", 0, 100, indeterminate = true)
-        if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIF_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIF_ID, notification)
+            }
+        } catch (t: Throwable) {
+            _lastError.value = t.message ?: t.javaClass.simpleName
+            stopSelf()
+            return START_NOT_STICKY
         }
         job?.cancel()
         job = scope.launch {
@@ -97,7 +103,7 @@ class ModelDownloadService : Service() {
 
     private fun buildNotification(text: String, progress: Int, max: Int, indeterminate: Boolean): Notification {
         return NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle("Agent JiN models")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))

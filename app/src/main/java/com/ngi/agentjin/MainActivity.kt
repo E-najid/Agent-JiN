@@ -50,8 +50,12 @@ class MainActivity : FragmentActivity() {
                 ActivityResultContracts.OpenDocumentTree(),
             ) { uri: Uri? ->
                 if (uri != null) {
-                    (application as AgentJinApp).container.storageRoot.takePersistablePermission(uri)
-                    vm.onFolderPicked()
+                    try {
+                        (application as AgentJinApp).container.storageRoot.takePersistablePermission(uri)
+                        vm.onFolderPicked()
+                    } catch (t: Throwable) {
+                        vm.reportError("Folder access failed: ${t.message ?: t.javaClass.simpleName}")
+                    }
                 }
             }
             val captureLauncher = rememberLauncherForActivityResult(
@@ -70,8 +74,12 @@ class MainActivity : FragmentActivity() {
                             onConfirmScreen = vm::setConfirmScreen,
                             onEnableA11y = { openAccessibilitySettings() },
                             onScreenCapture = {
-                                val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                                captureLauncher.launch(mpm.createScreenCaptureIntent())
+                                try {
+                                    val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                                    captureLauncher.launch(mpm.createScreenCaptureIntent())
+                                } catch (t: Throwable) {
+                                    vm.reportError("Screen capture: ${t.message ?: t.javaClass.simpleName}")
+                                }
                             },
                             onEnableBiometric = { vm.enableBiometricCache() },
                             onDownload = { vm.startDownload(); page = "main" },
@@ -165,9 +173,13 @@ class MainActivity : FragmentActivity() {
             executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    val cipher = result.cryptoObject?.cipher ?: return
-                    val key = vm.unwrap(cipher)
-                    vm.unlockWithKey(key)
+                    try {
+                        val cipher = result.cryptoObject?.cipher ?: return
+                        val key = vm.unwrap(cipher)
+                        vm.unlockWithKey(key)
+                    } catch (t: Throwable) {
+                        vm.reportError("Biometric unlock failed: ${t.message ?: t.javaClass.simpleName}")
+                    }
                 }
             },
         )

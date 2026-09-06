@@ -2,25 +2,13 @@ package com.ngi.agentjin.core.storage
 
 import android.content.Context
 import android.net.Uri
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 
 /**
  * Device-local preferences (not the portable SD-card folder).
  * Tree URI, lockout, download settings. Never stores the master password.
  */
 class DevicePreferences(context: Context) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "agentjin_device_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+    private val prefs = devicePrefs(context, "agentjin_device_prefs")
 
     var treeUri: Uri?
         get() = prefs.getString(KEY_TREE_URI, null)?.let(Uri::parse)

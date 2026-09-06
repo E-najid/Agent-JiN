@@ -11,7 +11,11 @@ class AgentJinApp : Application() {
     override fun onCreate() {
         super.onCreate()
         if (isLlamaProcess()) return
-        container = AppContainer(this)
+        container = try {
+            AppContainer(this)
+        } catch (t: Throwable) {
+            throw RuntimeException("Agent JiN failed to start: ${t.message}", t)
+        }
     }
 
     private fun isLlamaProcess(): Boolean {

@@ -134,6 +134,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun reportError(msg: String) {
+        _state.update { it.copy(error = msg, busy = false, status = "") }
+    }
+
     fun onFolderPicked() {
         refreshPhase()
     }
@@ -250,6 +254,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun afterUnlock() {
+        try {
         c.pluginManager.reload()
         val checks = c.modelManager.checkAll()
         val textOk = checks.any { it.spec.id == ModelCatalog.TEXT.id && it.status == ModelFileStatus.OK }
@@ -280,11 +285,27 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 error = null,
             )
         }
+        } catch (t: Throwable) {
+            _state.update {
+                it.copy(
+                    busy = false,
+                    status = "",
+                    unlocked = c.memoryStore.isUnlocked,
+                    phase = AppPhase.READY,
+                    error = t.message ?: t.javaClass.simpleName,
+                )
+            }
+        }
     }
 
     fun startDownload() {
-        ModelDownloadService.start(getApplication(), listOf(ModelCatalog.TEXT.id))
-        _state.update { it.copy(status = "Downloading text model…") }
+        try {
+            ModelDownloadService.start(getApplication(), listOf(ModelCatalog.TEXT.id))
+            _state.update { it.copy(status = "Downloading text model…", error = null) }
+        } catch (t: Throwable) {
+            _state.update { it.copy(error = t.message ?: t.javaClass.simpleName, status = "") }
+            return
+        }
         viewModelScope.launch {
             ModelDownloadService.running.collect { running ->
                 if (!running) {
@@ -387,21 +408,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun lock() {
         viewModelScope.launch {
-            c.conversations.closeAndPersist()
-            c.session.lock()
-            c.textEngine.unload()
-            c.visionEngine.unloadNow()
-            _state.update { it.copy(unlocked = false, phase = AppPhase.UNLOCK, messages = emptyList()) }
+            try {
+                c.conversations.closeAndPersist()
+                c.session.lock()
+                runCatching { c.textEngine.unload() }
+                runCatching { c.visionEngine.unloadNow() }
+                _state.update { it.copy(unlocked = false, phase = AppPhase.UNLOCK, messages = emptyList()) }
+            } catch (t: Throwable) {
+                _state.update { it.copy(error = t.message ?: t.javaClass.simpleName) }
+            }
         }
     }
 
     fun openHistory(name: String) {
-        val id = name.removeSuffix(".jsonl")
-        val events = c.taskHistory.readTask(id)
-        _state.update {
-            it.copy(historyPreview = events.joinToString("\n") { e ->
-                "${e.at} ${e.kind} ${e.plugin ?: ""} ${e.message ?: ""}"
-            })
+        viewModelScope.launch {
+            val preview = withContext(Dispatchers.IO) {
+                runCatching {
+                    val id = name.removeSuffix(".jsonl")
+                    c.taskHistory.readTask(id).joinToString("\n") { e ->
+                        "${e.at} ${e.kind} ${e.plugin ?: ""} ${e.message ?: ""}"
+                    }.take(8000)
+                }.getOrElse { t -> "Could not read history: ${t.message}" }
+            }
+            _state.update { it.copy(historyPreview = preview) }
         }
     }
 
@@ -417,7 +446,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun schemaVersion(): Int = MANIFEST_SCHEMA_VERSION
     fun textModelName(): String = ModelCatalog.TEXT.filename
     fun visionModelName(): String = ModelCatalog.VISION.filename
-    fun hasBiometricWrap(): Boolean = c.secretStore.hasBiometricWrappedKey()
+    fun hasBiometricWrap(): Boolean =
+        runCatching { c.secretStore.hasBiometricWrappedKey() }.getOrDefault(false)
     fun wrapCipher() = c.secretStore.createBiometricUnlockCipher()
     fun unwrap(cipher: javax.crypto.Cipher) = c.secretStore.unwrapDerivedKey(cipher)
     val screenshots get() = c.screenshots
