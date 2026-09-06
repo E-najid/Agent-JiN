@@ -3,6 +3,7 @@ package com.ngi.agentjin.core.di
 import android.app.Application
 import com.ngi.agentjin.core.crypto.CryptoEngine
 import com.ngi.agentjin.core.download.ModelDownloader
+import com.ngi.agentjin.core.inference.LlamaClient
 import com.ngi.agentjin.core.inference.ModelManager
 import com.ngi.agentjin.core.inference.RamPolicy
 import com.ngi.agentjin.core.inference.TextModelEngine

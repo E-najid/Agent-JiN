@@ -85,8 +85,8 @@ jobs:
           EXIT=$?
           echo "===== gradle exit $EXIT ====="
           tail -n 80 "$RUNNER_TEMP/gradle-build.log"
-          grep -E "error:|fatal error:|undefined reference" "$RUNNER_TEMP/gradle-build.log" | head -n 30 || true
-          grep -E "error:|fatal error:" "$RUNNER_TEMP/gradle-build.log" | head -n 8 | while IFS= read -r line; do
+          grep -E "e: |error:|fatal error:|undefined reference|Unresolved" "$RUNNER_TEMP/gradle-build.log" | head -n 40 || true
+          grep -E "e: |error:|fatal error:|Unresolved" "$RUNNER_TEMP/gradle-build.log" | head -n 8 | while IFS= read -r line; do
             echo "::error::$line"
           done
           if [ "$EXIT" -ne 0 ]; then
