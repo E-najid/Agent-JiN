@@ -52,16 +52,12 @@ class TextModelEngine(
             throw ModelNotReadyException("Text model is not loaded")
         }
         // grammar / onToken ignored: both were crash sources (GBNF hang, JNI UTF-8).
-        val out = llama.generate(
+        llama.generate(
             prompt,
             maxTokens.coerceIn(8, 128),
             temperature,
             stops.joinToString("\n"),
         )
-        onToken?.invoke(out)
-        shouldStop
-        grammar
-        out
     }
 
     companion object {
